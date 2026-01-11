@@ -1,0 +1,42 @@
+# GeoNames Reconciliation Service - Git Ignore
+# ==============================================
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# pyenv
+.python-version
+
+# Data files (too large for git)
+allCountries.zip
+allCountries.txt
+featureCodes_en.txt
+
+# Generated database
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
