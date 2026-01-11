@@ -1,0 +1,58 @@
+{
+  "$schema": "https://datasette.io/metadata.schema.json",
+  "title": "GeoNames Geographic Database",
+  "description": "GeoNames geographical database for place name reconciliation. Compatible with OpenRefine reconciliation API.",
+  "license": "CC BY 4.0",
+  "license_url": "https://www.geonames.org/export/",
+  "source": "GeoNames",
+  "source_url": "https://www.geonames.org/",
+  "databases": {
+    "geonames": {
+      "title": "GeoNames Places",
+      "description": "Geographic names from the GeoNames database - cities, administrative divisions, natural features, etc.",
+      "tables": {
+        "geonames": {
+          "title": "GeoNames",
+          "description": "Geographic place names for reconciliation",
+          "fts_table": "geonames_fts",
+          "fts_pk": "rowid",
+          "plugins": {
+            "datasette-reconcile": {
+              "id_field": "id",
+              "name_field": "name",
+              "type_field": "type",
+              "description_field": "country_code",
+              "type_default": [
+                {"id": "P.PPL", "name": "Populated place (city/town)"},
+                {"id": "P.PPLA", "name": "Seat of first-order admin division"},
+                {"id": "P.PPLA2", "name": "Seat of second-order admin division"},
+                {"id": "P.PPLC", "name": "Capital of a political entity"},
+                {"id": "A.ADM1", "name": "First-order administrative division (state/province)"},
+                {"id": "A.ADM2", "name": "Second-order administrative division (county)"},
+                {"id": "A.PCLI", "name": "Independent political entity (country)"},
+                {"id": "H.STM", "name": "Stream"},
+                {"id": "H.LK", "name": "Lake"},
+                {"id": "T.MT", "name": "Mountain"},
+                {"id": "T.HLL", "name": "Hill"},
+                {"id": "L.RGN", "name": "Region"},
+                {"id": "S.BLDG", "name": "Building"},
+                {"id": "S.CH", "name": "Church"},
+                {"id": "S.SCH", "name": "School"}
+              ],
+              "max_limit": 10,
+              "service_name": "GeoNames Reconciliation Service",
+              "identifierSpace": "https://sws.geonames.org/",
+              "schemaSpace": "https://www.geonames.org/ontology#Feature",
+              "view_url": "https://www.geonames.org/{{id}}"
+            }
+          }
+        },
+        "feature_codes": {
+          "title": "Feature Codes",
+          "description": "GeoNames feature codes with descriptions",
+          "hidden": true
+        }
+      }
+    }
+  }
+}

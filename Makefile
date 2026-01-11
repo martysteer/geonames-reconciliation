@@ -63,7 +63,6 @@ $(VENV_DIR)/.done:
 	@echo "Setting up Python virtual environment"
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo ""
-	@# Check if pyenv is available
 	@if command -v pyenv >/dev/null 2>&1; then \
 		echo "Using pyenv to manage Python version..."; \
 		pyenv install -s $(PYTHON_VERSION); \
@@ -145,52 +144,23 @@ $(SQLITE_DB): $(GEONAMES_TXT) $(FEATURE_CODES_TXT) | $(DATA_DIR)
 	@echo "This will take several minutes for the full dataset..."
 	@echo ""
 	@rm -f $(SQLITE_DB)
-	@# Import feature codes first for type mapping
 	@echo "Step 1/5: Importing feature codes..."
-	$(VENV_DIR)/bin/sqlite-utils create-table $(SQLITE_DB) feature_codes \
-		code text \
-		name text \
-		description text \
-		--pk code
-	@tail -n +2 $(FEATURE_CODES_TXT) | \
-		awk -F'\t' 'NF>=2 {print $$1 "\t" $$2 "\t" (NF>=3 ? $$3 : "")}' | \
-		$(VENV_DIR)/bin/sqlite-utils insert $(SQLITE_DB) feature_codes - \
-			--tsv \
-			--ignore
-	@# Create main table
-	@echo "Step 2/5: Creating geonames table schema..."
-	$(VENV_DIR)/bin/sqlite-utils create-table $(SQLITE_DB) geonames \
-		geonameid integer \
-		name text \
-		asciiname text \
-		alternatenames text \
-		latitude real \
-		longitude real \
-		feature_class text \
-		feature_code text \
-		country_code text \
-		cc2 text \
-		admin1_code text \
-		admin2_code text \
-		admin3_code text \
-		admin4_code text \
-		population integer \
-		elevation integer \
-		dem integer \
-		timezone text \
-		modification_date text \
-		--pk geonameid
-	@# Import data
-	@echo "Step 3/5: Importing GeoNames data (this takes a while)..."
-	$(VENV_DIR)/bin/sqlite-utils insert $(SQLITE_DB) geonames $(GEONAMES_TXT) \
-		--tsv \
-		--ignore
-	@# Create search fields and indexes
-	@echo "Step 4/5: Creating search field and indexes..."
+	@# Feature codes file has no header, format: code<TAB>name<TAB>description
+	@echo "code	name	description" > /tmp/feature_codes_header.txt
+	@cat /tmp/feature_codes_header.txt $(FEATURE_CODES_TXT) | \
+		$(VENV_DIR)/bin/sqlite-utils insert $(SQLITE_DB) feature_codes - --tsv
+	@rm -f /tmp/feature_codes_header.txt
+	@echo "Step 2/5: Importing GeoNames data (this takes a while)..."
+	@# GeoNames file has no header - create one and import
+	@echo "geonameid	name	asciiname	alternatenames	latitude	longitude	feature_class	feature_code	country_code	cc2	admin1_code	admin2_code	admin3_code	admin4_code	population	elevation	dem	timezone	modification_date" > /tmp/geonames_header.txt
+	@cat /tmp/geonames_header.txt $(GEONAMES_TXT) | \
+		$(VENV_DIR)/bin/sqlite-utils insert $(SQLITE_DB) geonames - --tsv
+	@rm -f /tmp/geonames_header.txt
+	@echo "Step 3/5: Creating search field and indexes..."
 	@$(VENV_DIR)/bin/sqlite-utils add-column $(SQLITE_DB) geonames searchText text 2>/dev/null || true
 	@$(VENV_DIR)/bin/sqlite-utils add-column $(SQLITE_DB) geonames type text 2>/dev/null || true
 	@$(VENV_DIR)/bin/sqlite-utils add-column $(SQLITE_DB) geonames id text 2>/dev/null || true
-	@echo "  Populating derived fields..."
+	@echo "Step 4/5: Populating derived fields..."
 	sqlite3 $(SQLITE_DB) " \
 		UPDATE geonames SET \
 			id = CAST(geonameid AS TEXT), \
@@ -202,7 +172,6 @@ $(SQLITE_DB): $(GEONAMES_TXT) $(FEATURE_CODES_TXT) | $(DATA_DIR)
 	sqlite3 $(SQLITE_DB) "CREATE INDEX IF NOT EXISTS idx_geonames_type ON geonames(type);"
 	sqlite3 $(SQLITE_DB) "CREATE INDEX IF NOT EXISTS idx_geonames_country ON geonames(country_code);"
 	sqlite3 $(SQLITE_DB) "CREATE INDEX IF NOT EXISTS idx_geonames_feature ON geonames(feature_class);"
-	@# Create FTS5 index
 	@echo "Step 5/5: Creating FTS5 full-text search index..."
 	$(VENV_DIR)/bin/sqlite-utils enable-fts $(SQLITE_DB) geonames searchText name --fts5 --create-triggers
 	@echo ""
@@ -258,74 +227,16 @@ sqlite-test-fts: $(SQLITE_DB)
 		LIMIT 10;"
 
 # =============================================================================
-# Metadata Generation
+# Metadata - Already provided as geonames.metadata.json
 # =============================================================================
 .PHONY: metadata
 metadata: $(METADATA_JSON)
 
 $(METADATA_JSON):
-	@echo "Creating datasette metadata file..."
-	@cat > $(METADATA_JSON) << 'METADATA'
-{
-  "$$schema": "https://datasette.io/metadata.schema.json",
-  "title": "GeoNames Geographic Database",
-  "description": "GeoNames geographical database for place name reconciliation. Compatible with OpenRefine reconciliation API.",
-  "license": "CC BY 4.0",
-  "license_url": "https://www.geonames.org/export/",
-  "source": "GeoNames",
-  "source_url": "https://www.geonames.org/",
-  "databases": {
-    "geonames": {
-      "title": "GeoNames Places",
-      "description": "Geographic names from the GeoNames database - cities, administrative divisions, natural features, etc.",
-      "tables": {
-        "geonames": {
-          "title": "GeoNames",
-          "description": "Geographic place names for reconciliation",
-          "fts_table": "geonames_fts",
-          "fts_pk": "rowid",
-          "plugins": {
-            "datasette-reconcile": {
-              "id_field": "id",
-              "name_field": "name",
-              "type_field": "type",
-              "description_field": "country_code",
-              "type_default": [
-                {"id": "P.PPL", "name": "Populated place (city/town)"},
-                {"id": "P.PPLA", "name": "Seat of first-order admin division"},
-                {"id": "P.PPLA2", "name": "Seat of second-order admin division"},
-                {"id": "P.PPLC", "name": "Capital of a political entity"},
-                {"id": "A.ADM1", "name": "First-order administrative division (state/province)"},
-                {"id": "A.ADM2", "name": "Second-order administrative division (county)"},
-                {"id": "A.PCLI", "name": "Independent political entity (country)"},
-                {"id": "H.STM", "name": "Stream"},
-                {"id": "H.LK", "name": "Lake"},
-                {"id": "T.MT", "name": "Mountain"},
-                {"id": "T.HLL", "name": "Hill"},
-                {"id": "L.RGN", "name": "Region"},
-                {"id": "S.BLDG", "name": "Building"},
-                {"id": "S.CH", "name": "Church"},
-                {"id": "S.SCH", "name": "School"}
-              ],
-              "max_limit": 10,
-              "service_name": "GeoNames Reconciliation Service",
-              "identifierSpace": "https://sws.geonames.org/",
-              "schemaSpace": "https://www.geonames.org/ontology#Feature",
-              "view_url": "https://www.geonames.org/{{id}}"
-            }
-          }
-        },
-        "feature_codes": {
-          "title": "Feature Codes",
-          "description": "GeoNames feature codes with descriptions",
-          "hidden": true
-        }
-      }
-    }
-  }
-}
-METADATA
-	@echo "✓ Created $(METADATA_JSON)"
+	@echo "ERROR: $(METADATA_JSON) not found!"
+	@echo "This file should be included in the repository."
+	@echo "Please restore it from git or recreate it."
+	@exit 1
 
 # =============================================================================
 # Datasette Server
@@ -369,7 +280,7 @@ serve-public: check-venv $(SQLITE_DB) $(METADATA_JSON)
 # Main targets
 # =============================================================================
 .PHONY: all
-all: venv download extract sqlite metadata
+all: venv download extract sqlite
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo "✓ GeoNames Reconciliation Service is ready!"
@@ -385,7 +296,7 @@ all: venv download extract sqlite metadata
 
 # Quick setup without downloading (if files already exist)
 .PHONY: setup
-setup: venv sqlite metadata
+setup: venv sqlite
 
 # =============================================================================
 # Test reconciliation
@@ -438,7 +349,7 @@ list:
 	@if [ -f $(METADATA_JSON) ]; then \
 		echo "  ✓ $(METADATA_JSON)"; \
 	else \
-		echo "  ✗ $(METADATA_JSON) (not created - run 'make metadata')"; \
+		echo "  ✗ $(METADATA_JSON) (missing!)"; \
 	fi
 	@echo ""
 	@echo "Virtual environment:"
@@ -463,7 +374,6 @@ versions: check-venv
 clean:
 	@echo "Cleaning generated files (keeping downloads)..."
 	rm -rf $(DATA_DIR)
-	rm -f $(METADATA_JSON)
 	rm -f $(FEATURE_CODES_TXT)
 	@echo "✓ Cleaned. Run 'make clean-all' to also remove downloads and venv."
 
@@ -508,7 +418,6 @@ help:
 	@echo "  download           - Download allCountries.zip from GeoNames"
 	@echo "  extract            - Extract the zip file"
 	@echo "  sqlite             - Build SQLite database with FTS"
-	@echo "  metadata           - Generate datasette metadata file"
 	@echo ""
 	@echo "Server:"
 	@echo "  serve              - Start datasette server (localhost only)"
