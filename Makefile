@@ -124,6 +124,8 @@ $(GEONAMES_TXT): $(GEONAMES_ZIP)
 	@echo "Extracting $(GEONAMES_ZIP)"
 	@echo "═══════════════════════════════════════════════════════════════"
 	unzip -o $(GEONAMES_ZIP)
+	@# Touch the file so its timestamp is newer than the zip
+	@touch $(GEONAMES_TXT)
 	@echo ""
 	@echo "✓ Extracted: $$(wc -l < $(GEONAMES_TXT) | tr -d ' ') records"
 
