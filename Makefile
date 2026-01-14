@@ -171,6 +171,7 @@ $(SQLITE_DB): $(GEONAMES_TXT) $(FEATURE_CODES_TXT)
 	sqlite3 $(SQLITE_DB) "CREATE INDEX IF NOT EXISTS idx_geonames_type ON geonames(type);"
 	sqlite3 $(SQLITE_DB) "CREATE INDEX IF NOT EXISTS idx_geonames_country ON geonames(country_code);"
 	sqlite3 $(SQLITE_DB) "CREATE INDEX IF NOT EXISTS idx_geonames_feature ON geonames(feature_class);"
+	sqlite3 $(SQLITE_DB) "CREATE INDEX IF NOT EXISTS idx_geonames_name ON geonames(name);"
 	@echo "Step 5/5: Creating FTS5 full-text search index..."
 	$(VENV_DIR)/bin/sqlite-utils enable-fts $(SQLITE_DB) geonames searchText name --fts5 --create-triggers
 	@echo ""
