@@ -6,7 +6,7 @@
 # Directory structure:
 #   allCountries.zip          - Downloaded source data
 #   allCountries.txt          - Extracted tab-separated data
-#   data/geonames.db          - SQLite database with FTS indexes
+#   geonames.db               - SQLite database with FTS indexes
 #   geonames.metadata.json    - Datasette metadata for reconciliation
 #
 # Usage:
@@ -43,7 +43,7 @@ FEATURE_CODES_TXT := featureCodes_en.txt
 
 # Output files
 DATA_DIR := data
-SQLITE_DB := $(DATA_DIR)/geonames.db
+SQLITE_DB := geonames.db
 METADATA_JSON := geonames.metadata.json
 
 # Datasette port
@@ -132,13 +132,10 @@ $(GEONAMES_TXT): $(GEONAMES_ZIP)
 # =============================================================================
 # SQLite Database
 # =============================================================================
-$(DATA_DIR):
-	mkdir -p $(DATA_DIR)
-
 .PHONY: sqlite
 sqlite: check-venv $(SQLITE_DB)
 
-$(SQLITE_DB): $(GEONAMES_TXT) $(FEATURE_CODES_TXT) | $(DATA_DIR)
+$(SQLITE_DB): $(GEONAMES_TXT) $(FEATURE_CODES_TXT)
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo "Building SQLite database with FTS indexes"
 	@echo "═══════════════════════════════════════════════════════════════"
@@ -375,7 +372,6 @@ versions: check-venv
 .PHONY: clean
 clean:
 	@echo "Cleaning generated files (keeping downloads)..."
-	rm -rf $(DATA_DIR)
 	rm -f $(FEATURE_CODES_TXT)
 	@echo "✓ Cleaned. Run 'make clean-all' to also remove downloads and venv."
 
