@@ -163,7 +163,7 @@ $(SQLITE_DB): $(GEONAMES_TXT) $(FEATURE_CODES_TXT)
 	sqlite3 $(SQLITE_DB) " \
 		UPDATE geonames SET \
 			id = CAST(geonameid AS TEXT), \
-			type = feature_class || '.' || feature_code, \
+			type = feature_class, \
 			searchText = name || ' ' || COALESCE(asciiname, '') || ' ' || COALESCE(alternatenames, ''); \
 	"
 	@echo "  Creating indexes..."
