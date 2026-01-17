@@ -1,0 +1,28 @@
+# Don't copy data files - they're downloaded fresh or mounted as volumes
+allCountries.zip
+allCountries.txt
+featureCodes_en.txt
+geonames.db
+
+# Python virtual environment (not needed in container)
+.venv/
+__pycache__/
+*.pyc
+
+# Version managers
+.python-version
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build scripts for other platforms
+build.ps1

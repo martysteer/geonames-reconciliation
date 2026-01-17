@@ -3,7 +3,7 @@
 # Creates a datasette-based reconciliation endpoint for GeoNames geographic data
 # compatible with OpenRefine's reconciliation API (W3C Reconciliation Service API v0.2)
 #
-# Usage:
+# Usage (native):
 #   make build    - Complete setup: venv + download + database
 #   make serve    - Start datasette reconciliation server (use PUBLIC=1 for network access)
 #   make test     - Test FTS and reconciliation endpoint
@@ -11,36 +11,62 @@
 #   make update   - Re-download source data and rebuild database
 #   make clean    - Remove database only (quick reset)
 #   make clean-all - Remove everything including downloads and venv
+#
+# Usage (Docker):
+#   docker compose up              - Build and serve (first run downloads data)
+#   docker compose run --rm geonames make status
 
 # =============================================================================
-# Configuration
+# Configuration (override with environment variables for Docker)
 # =============================================================================
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-PYTHON_VERSION := 3.12.4
-VENV_DIR := .venv
+PYTHON_VERSION ?= 3.12.4
+VENV_DIR ?= .venv
 
+# Data file paths (override for Docker volume mounts)
+DATA_DIR ?= .
 GEONAMES_URL := https://download.geonames.org/export/dump/allCountries.zip
-GEONAMES_ZIP := allCountries.zip
-GEONAMES_TXT := allCountries.txt
+GEONAMES_ZIP ?= $(DATA_DIR)/allCountries.zip
+GEONAMES_TXT ?= $(DATA_DIR)/allCountries.txt
 
 FEATURE_CODES_URL := https://download.geonames.org/export/dump/featureCodes_en.txt
-FEATURE_CODES_TXT := featureCodes_en.txt
+FEATURE_CODES_TXT ?= $(DATA_DIR)/featureCodes_en.txt
 
-SQLITE_DB := geonames.db
-METADATA_JSON := geonames.metadata.json
+SQLITE_DB ?= $(DATA_DIR)/geonames.db
+METADATA_JSON ?= geonames.metadata.json
 
-PORT := 8001
+PORT ?= 8001
+
+# Docker mode: when DOCKER=1, skip venv and use system Python
+DOCKER ?=
 
 .PRECIOUS: $(GEONAMES_ZIP) $(GEONAMES_TXT)
+
+# =============================================================================
+# Tool paths (venv or system depending on DOCKER mode)
+# =============================================================================
+ifdef DOCKER
+  PYTHON := python3
+  PIP := pip
+  DATASETTE := datasette
+  SQLITE_UTILS := sqlite-utils
+  VENV_DONE :=
+else
+  PYTHON := $(VENV_DIR)/bin/python3
+  PIP := $(VENV_DIR)/bin/pip
+  DATASETTE := $(VENV_DIR)/bin/datasette
+  SQLITE_UTILS := $(VENV_DIR)/bin/sqlite-utils
+  VENV_DONE := $(VENV_DIR)/.done
+endif
 
 # =============================================================================
 # Main Targets
 # =============================================================================
 .PHONY: build
-build: $(VENV_DIR)/.done $(SQLITE_DB)
+build: $(VENV_DONE) $(SQLITE_DB)
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo "✓ GeoNames Reconciliation Service is ready!"
@@ -50,7 +76,7 @@ build: $(VENV_DIR)/.done $(SQLITE_DB)
 	@echo ""
 
 .PHONY: serve
-serve: $(VENV_DIR)/.done $(SQLITE_DB) $(METADATA_JSON)
+serve: $(VENV_DONE) $(SQLITE_DB) $(METADATA_JSON)
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo "Starting GeoNames Reconciliation Service"
 	@echo "═══════════════════════════════════════════════════════════════"
@@ -66,7 +92,7 @@ serve: $(VENV_DIR)/.done $(SQLITE_DB) $(METADATA_JSON)
 	@echo "Press Ctrl+C to stop"
 	@echo "═══════════════════════════════════════════════════════════════"
 	@HOST=$${PUBLIC:+0.0.0.0}; HOST=$${HOST:-127.0.0.1}; \
-	$(VENV_DIR)/bin/datasette $(SQLITE_DB) \
+	$(DATASETTE) $(SQLITE_DB) \
 		--metadata $(METADATA_JSON) \
 		--port $(PORT) \
 		--host $$HOST \
@@ -74,7 +100,7 @@ serve: $(VENV_DIR)/.done $(SQLITE_DB) $(METADATA_JSON)
 		--setting max_returned_rows 1000
 
 .PHONY: test
-test: $(VENV_DIR)/.done $(SQLITE_DB)
+test: $(VENV_DONE) $(SQLITE_DB)
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo "Testing GeoNames Service"
 	@echo "═══════════════════════════════════════════════════════════════"
@@ -89,7 +115,7 @@ test: $(VENV_DIR)/.done $(SQLITE_DB)
 		LIMIT 5;"
 	@echo ""
 	@echo "Reconciliation endpoint test:"
-	@$(VENV_DIR)/bin/python3 -c " \
+	@$(PYTHON) -c " \
 import json, httpx; \
 queries = {'q0': {'query': 'London'}, 'q1': {'query': 'Paris'}}; \
 try: \
@@ -107,7 +133,11 @@ status:
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo ""
 	@echo "Files:"
+ifdef DOCKER
+	@echo "  ✓ Docker mode (system Python)"
+else
 	@if [ -f $(VENV_DIR)/.done ]; then echo "  ✓ venv"; else echo "  ✗ venv"; fi
+endif
 	@if [ -f $(GEONAMES_ZIP) ]; then echo "  ✓ $(GEONAMES_ZIP) ($$(du -h $(GEONAMES_ZIP) | cut -f1))"; else echo "  ✗ $(GEONAMES_ZIP)"; fi
 	@if [ -f $(GEONAMES_TXT) ]; then echo "  ✓ $(GEONAMES_TXT) ($$(wc -l < $(GEONAMES_TXT) | tr -d ' ') lines)"; else echo "  ✗ $(GEONAMES_TXT)"; fi
 	@if [ -f $(SQLITE_DB) ]; then echo "  ✓ $(SQLITE_DB) ($$(du -h $(SQLITE_DB) | cut -f1))"; else echo "  ✗ $(SQLITE_DB)"; fi
@@ -123,11 +153,13 @@ status:
 			FROM geonames GROUP BY feature_class ORDER BY count DESC;"; \
 	fi
 	@echo ""
+ifndef DOCKER
 	@if [ -f $(VENV_DIR)/.done ]; then \
 		echo "Versions:"; \
-		$(VENV_DIR)/bin/python3 --version | sed 's/^/  /'; \
-		$(VENV_DIR)/bin/pip show datasette 2>/dev/null | grep Version | sed 's/^/  datasette /'; \
+		$(PYTHON) --version | sed 's/^/  /'; \
+		$(PIP) show datasette 2>/dev/null | grep Version | sed 's/^/  datasette /'; \
 	fi
+endif
 
 .PHONY: update
 update: clean
@@ -145,15 +177,18 @@ clean:
 clean-all:
 	@echo "Removing all generated files..."
 	@rm -f $(SQLITE_DB) $(GEONAMES_ZIP) $(GEONAMES_TXT) $(FEATURE_CODES_TXT) .python-version
+ifndef DOCKER
 	@rm -rf $(VENV_DIR)
+endif
 	@echo "✓ All files removed."
 
 # =============================================================================
-# Virtual Environment (explicit target kept by request)
+# Virtual Environment (skipped in Docker mode)
 # =============================================================================
 .PHONY: venv
-venv: $(VENV_DIR)/.done
+venv: $(VENV_DONE)
 
+ifndef DOCKER
 $(VENV_DIR)/.done:
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo "Setting up Python virtual environment"
@@ -164,13 +199,14 @@ $(VENV_DIR)/.done:
 		pyenv local $(PYTHON_VERSION); \
 	fi
 	@python3 -m venv $(VENV_DIR)
-	@$(VENV_DIR)/bin/pip install --upgrade pip -q
-	@$(VENV_DIR)/bin/pip install datasette datasette-reconcile sqlite-utils csvkit httpx -q
+	@$(PIP) install --upgrade pip -q
+	@$(PIP) install datasette datasette-reconcile sqlite-utils csvkit httpx -q
 	@touch $@
 	@echo "✓ Virtual environment ready"
+endif
 
 # =============================================================================
-# Internal Dependencies (not intended for direct use)
+# Data Downloads
 # =============================================================================
 $(GEONAMES_ZIP):
 	@echo "Downloading GeoNames data (~400MB)..."
@@ -181,24 +217,27 @@ $(FEATURE_CODES_TXT):
 
 $(GEONAMES_TXT): $(GEONAMES_ZIP)
 	@echo "Extracting..."
-	@unzip -oq $(GEONAMES_ZIP)
+	@unzip -oq $(GEONAMES_ZIP) -d $(DATA_DIR)
 	@touch $@
 
-$(SQLITE_DB): $(VENV_DIR)/.done $(GEONAMES_TXT) $(FEATURE_CODES_TXT)
+# =============================================================================
+# Database Build
+# =============================================================================
+$(SQLITE_DB): $(VENV_DONE) $(GEONAMES_TXT) $(FEATURE_CODES_TXT)
 	@echo "═══════════════════════════════════════════════════════════════"
 	@echo "Building SQLite database (this takes several minutes)..."
 	@echo "═══════════════════════════════════════════════════════════════"
 	@rm -f $(SQLITE_DB)
 	@echo "  Importing feature codes..."
 	@echo "code	name	description" | cat - $(FEATURE_CODES_TXT) | \
-		$(VENV_DIR)/bin/sqlite-utils insert $(SQLITE_DB) feature_codes - --tsv
+		$(SQLITE_UTILS) insert $(SQLITE_DB) feature_codes - --tsv
 	@echo "  Importing GeoNames data..."
 	@echo "geonameid	name	asciiname	alternatenames	latitude	longitude	feature_class	feature_code	country_code	cc2	admin1_code	admin2_code	admin3_code	admin4_code	population	elevation	dem	timezone	modification_date" | \
-		cat - $(GEONAMES_TXT) | $(VENV_DIR)/bin/sqlite-utils insert $(SQLITE_DB) geonames - --tsv
+		cat - $(GEONAMES_TXT) | $(SQLITE_UTILS) insert $(SQLITE_DB) geonames - --tsv
 	@echo "  Adding columns and indexes..."
-	@$(VENV_DIR)/bin/sqlite-utils add-column $(SQLITE_DB) geonames searchText text 2>/dev/null || true
-	@$(VENV_DIR)/bin/sqlite-utils add-column $(SQLITE_DB) geonames type text 2>/dev/null || true
-	@$(VENV_DIR)/bin/sqlite-utils add-column $(SQLITE_DB) geonames id text 2>/dev/null || true
+	@$(SQLITE_UTILS) add-column $(SQLITE_DB) geonames searchText text 2>/dev/null || true
+	@$(SQLITE_UTILS) add-column $(SQLITE_DB) geonames type text 2>/dev/null || true
+	@$(SQLITE_UTILS) add-column $(SQLITE_DB) geonames id text 2>/dev/null || true
 	@sqlite3 $(SQLITE_DB) " \
 		UPDATE geonames SET \
 			id = CAST(geonameid AS TEXT), \
@@ -209,7 +248,7 @@ $(SQLITE_DB): $(VENV_DIR)/.done $(GEONAMES_TXT) $(FEATURE_CODES_TXT)
 		CREATE INDEX IF NOT EXISTS idx_geonames_country ON geonames(country_code); \
 		CREATE INDEX IF NOT EXISTS idx_geonames_name ON geonames(name);"
 	@echo "  Creating FTS index..."
-	@$(VENV_DIR)/bin/sqlite-utils enable-fts $(SQLITE_DB) geonames searchText name --fts5 --create-triggers
+	@$(SQLITE_UTILS) enable-fts $(SQLITE_DB) geonames searchText name --fts5 --create-triggers
 	@echo ""
 	@echo "✓ Database ready: $$(du -h $(SQLITE_DB) | cut -f1), $$(sqlite3 $(SQLITE_DB) 'SELECT COUNT(*) FROM geonames;') records"
 
@@ -229,15 +268,19 @@ help:
 	@echo "Datasette-based reconciliation endpoint for GeoNames data,"
 	@echo "compatible with OpenRefine's W3C Reconciliation API."
 	@echo ""
-	@echo "Targets:"
-	@echo "  build      Complete setup: venv + download + database"
-	@echo "  serve      Start server (use PUBLIC=1 for network access)"
-	@echo "  test       Test FTS search and reconciliation endpoint"
-	@echo "  status     Show file status and database statistics"
-	@echo "  update     Re-download source data and rebuild"
-	@echo "  clean      Remove database only"
-	@echo "  clean-all  Remove everything including downloads and venv"
-	@echo "  venv       Create Python virtual environment only"
+	@echo "Native usage:"
+	@echo "  make build      Complete setup: venv + download + database"
+	@echo "  make serve      Start server (use PUBLIC=1 for network access)"
+	@echo "  make test       Test FTS search and reconciliation endpoint"
+	@echo "  make status     Show file status and database statistics"
+	@echo "  make update     Re-download source data and rebuild"
+	@echo "  make clean      Remove database only"
+	@echo "  make clean-all  Remove everything including downloads and venv"
+	@echo "  make venv       Create Python virtual environment only"
+	@echo ""
+	@echo "Docker usage:"
+	@echo "  docker compose up           Build and start service"
+	@echo "  docker compose run --rm geonames make status"
 	@echo ""
 	@echo "Quick start:"
 	@echo "  make build && make serve"

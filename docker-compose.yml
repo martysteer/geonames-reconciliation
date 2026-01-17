@@ -1,0 +1,47 @@
+# GeoNames Reconciliation Service
+#
+# Quick start:
+#   docker compose up -d          # Start service (builds DB on first run)
+#   docker compose logs -f        # Watch logs
+#   docker compose down           # Stop
+#
+# Commands:
+#   docker compose run --rm geonames make status
+#   docker compose run --rm geonames make test
+#   docker compose run --rm geonames make clean
+#   docker compose run --rm geonames make update
+
+services:
+  geonames:
+    build: .
+    container_name: geonames-reconcile
+    ports:
+      - "8001:8001"
+    volumes:
+      # Persist downloaded data and database between container restarts
+      - geonames-data:/app/data
+      # Mount metadata for live editing (optional - remove :ro to allow edits)
+      - ./geonames.metadata.json:/app/geonames.metadata.json:ro
+    environment:
+      - DOCKER=1
+      - DATA_DIR=/app/data
+      - PUBLIC=1
+    restart: unless-stopped
+    # On first run, build the database, then serve
+    command: >
+      bash -c "
+        if [ ! -f /app/data/geonames.db ]; then
+          echo ''
+          echo '════════════════════════════════════════════════════════════════'
+          echo 'First run - downloading data and building database...'
+          echo 'This will take several minutes. Go get a coffee ☕'
+          echo '════════════════════════════════════════════════════════════════'
+          echo ''
+          make build DOCKER=1
+        fi
+        exec make serve DOCKER=1 PUBLIC=1
+      "
+
+volumes:
+  geonames-data:
+    name: geonames-reconcile-data
