@@ -38,6 +38,17 @@ http://127.0.0.1:8001/geonames/geonames/-/reconcile
 2. Click **Add Standard Service...**
 3. Enter: `http://127.0.0.1:8001/geonames/geonames/-/reconcile`
 
+## Testing
+
+A sample dataset `test-data.csv` is included with ~8000 geographic place names for testing:
+
+1. Start the service (`docker compose up -d` or `make serve`)
+2. Open OpenRefine and create a new project from `test-data.csv`
+3. Reconcile the **City** or **Country** column against the service
+4. Optionally filter by type (e.g., `P` for populated places, `A` for administrative)
+
+The test data includes historical names (Batavia→Jakarta, Canton→Guangzhou), modern place names, and various administrative levels - useful for validating fuzzy matching and type filtering.
+
 ## Commands
 
 | Docker | Native | Description |
@@ -78,13 +89,11 @@ GeoNames data is [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Cred
 
 ## References
 
-- [GeoNames](https://www.geonames.org/) - Geographic database
 - [datasette](https://datasette.io/) - Tool for exploring and publishing data
 - [datasette-reconcile](https://github.com/drkane/datasette-reconcile) - Reconciliation API plugin
-- [W3C Reconciliation API](https://www.w3.org/community/reports/reconciliation/CG-FINAL-specs-0.2-20230410/) - Specification
+- [GeoNames](https://www.geonames.org/) - Geographic database
 - [OpenRefine](https://openrefine.org/) - Data cleaning tool
-- [SQLite FTS5](https://sqlite.org/fts5.html) - SQLite full text search
-
-## See Also
 
 - [OpenRefine Reconciliation Documentation](https://docs.openrefine.org/manual/reconciling)
+- [SQLite FTS5](https://sqlite.org/fts5.html) - SQLite full text search
+- [W3C Reconciliation API](https://www.w3.org/community/reports/reconciliation/CG-FINAL-specs-0.2-20230410/) - Specification
