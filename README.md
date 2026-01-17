@@ -2,78 +2,79 @@
 
 A local reconciliation service for [GeoNames](https://www.geonames.org/) geographic data, compatible with [OpenRefine](https://openrefine.org/) and the [W3C Reconciliation Service API v0.2](https://www.w3.org/community/reports/reconciliation/CG-FINAL-specs-0.2-20230410/).
 
-This service allows you to match place names in your datasets against the GeoNames database of over 13 million geographic features.
+Match place names against 13+ million geographic features with full-text search.
 
 ## Features
-
 - **Full-text search** with [FTS5](https://sqlite.org/fts5.html) for fast, fuzzy matching
 - **Type filtering** by GeoNames feature class (populated places, administrative, hydrographic, etc.)
 - **OpenRefine compatible** via datasette-reconcile plugin
-- **Self-contained** Python virtual environment
+- **Self-contained** Python or Docker virtual environment
 - **Offline operation** - works without internet after initial setup
 
-## Requirements
+## Quick Start
 
-- **macOS** or **Linux** (Windows via WSL)
-- **Python 3.8+** (preferably managed via pyenv)
-- **curl** and **unzip** (standard on most systems)
-- **~5GB disk space** (400MB download, 1.5GB extracted, 3GB database)
-
-## Installation & Usage
+### Option 1: Docker (recommended)
 
 ```bash
-make all      # Downloads data (~400MB), builds database, sets up environment
-make serve    # Start the reconciliation server
+docker compose up -d        # First run downloads data and builds DB (~10 min)
+docker compose logs -f      # Watch progress
 ```
 
-Then in OpenRefine:
-1. Open a column dropdown → **Reconcile** → **Start reconciling...**
+### Option 2: Native (macOS/Linux)
+
+```bash
+make build                  # Downloads data, creates venv, builds DB
+make serve                  # Start server
+```
+
+The service will be available at:
+```
+http://127.0.0.1:8001/geonames/geonames/-/reconcile
+```
+
+## Using with OpenRefine
+
+1. Column dropdown → **Reconcile** → **Start reconciling...**
 2. Click **Add Standard Service...**
 3. Enter: `http://127.0.0.1:8001/geonames/geonames/-/reconcile`
 
-If the data files already exist, use `make setup` for a quicker build.
+## Commands
 
-Run `make help` to see all available commands.
+| Docker | Native | Description |
+|--------|--------|-------------|
+| `docker compose up -d` | `make build && make serve` | Build and run |
+| `docker compose down` | Ctrl+C | Stop |
+| `docker compose run --rm geonames make status` | `make status` | Show stats |
+| `docker compose run --rm geonames make update` | `make update` | Re-download data |
+| `docker compose down -v` | `make clean-all` | Remove everything |
 
-## GeoNames Feature Types
+## Feature Types
 
-This service uses GeoNames top-level feature classes for type filtering:
+Filter reconciliation by GeoNames feature class:
 
 | Type | Description |
 |------|-------------|
 | `P` | Populated places (cities, towns, villages) |
-| `A` | Administrative divisions (countries, states, districts) |
-| `H` | Hydrographic features (rivers, lakes, seas) |
-| `T` | Terrain/topographic features (mountains, valleys, islands) |
-| `L` | Area/region (parks, reserves, regions) |
-| `S` | Spot/structure (buildings, farms, airports) |
-| `R` | Road/railroad (roads, trails, railways) |
-| `V` | Vegetation (forests, grasslands, vineyards) |
-| `U` | Undersea features (trenches, ridges, seamounts) |
+| `A` | Administrative divisions (countries, states) |
+| `H` | Hydrographic (rivers, lakes, seas) |
+| `T` | Terrain (mountains, valleys, islands) |
+| `L` | Areas (parks, reserves, regions) |
+| `S` | Structures (buildings, airports) |
+| `R` | Roads/railroads |
+| `V` | Vegetation (forests, grasslands) |
+| `U` | Undersea features |
 
-Full feature code list: https://www.geonames.org/export/codes.html
+## Requirements
 
-## Directory Structure
+**Docker:** Docker Desktop (Windows, macOS, Linux)
 
-```
-GeoNames/
-├── Makefile                    # Build automation
-├── README.md                   # This file
-├── geonames.metadata.json      # Datasette reconciliation service configuration
-├
-├── geonames.db                 # SQLite database with FTS (generated)
-├── .venv/                      # Python virtual environment (generated)
-├── .python-version             # pyenv version file (generated)
-├── allCountries.zip            # Downloaded GeoNames data (downloaded)
-├── allCountries.txt            # Extracted data (~13M records) (extracted)
-└── featureCodes_en.txt         # Feature code descriptions (generated)
-```
+**Native:** Python 3.10+, curl, unzip, make (macOS/Linux only)
+
+**Disk space:** ~5GB (400MB download → 1.5GB extracted → 3GB database)
 
 ## Data License
 
-GeoNames data is available under [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/).
-
-When using this data, please credit GeoNames: https://www.geonames.org/
+GeoNames data is [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Credit: https://www.geonames.org/
 
 ## References
 
@@ -86,5 +87,4 @@ When using this data, please credit GeoNames: https://www.geonames.org/
 
 ## See Also
 
-- [FAST Reconciliation Service](../FAST/) - Subject headings reconciliation
 - [OpenRefine Reconciliation Documentation](https://docs.openrefine.org/manual/reconciling)
